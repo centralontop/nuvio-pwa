@@ -10,24 +10,39 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Generate Certificate and Sign Package
+      - name: Patch for Xbox and Sign
         shell: powershell
         run: |
-          # 1. Create a self-signed certificate matching your new Publisher ID (CN=central)
-          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=central" -KeyUsage DigitalSignature -FriendlyName "NuvioXboxCert" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          # 1. Find the official Windows SDK packing and signing tools
+          $makeappx = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "makeappx.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1).FullName
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1).FullName
+
+          # 2. Unpack PWABuilder's bundle to get to the core app file
+          & $makeappx unbundle /p Nuvio.msixbundle /d unbundled
           
-          # 2. Export it as a PFX file
+          # 3. Find the main MSIX package (ignoring scale assets) and extract it
+          $msix = Get-ChildItem -Path "unbundled" -Filter "*.msix" | Where-Object { $_.Name -notmatch "scale" } | Select-Object -First 1
+          & $makeappx unpack /p $msix.FullName /d unpacked_app
+          
+          # 4. The Magic Trick: Patch the Manifest to unlock Xbox installation
+          $manifestPath = "unpacked_app\AppxManifest.xml"
+          $manifestContent = Get-Content $manifestPath -Raw
+          $manifestContent = $manifestContent -replace 'Name="Windows.Desktop"', 'Name="Windows.Universal"'
+          Set-Content -Path $manifestPath -Value $manifestContent
+          
+          # 5. Repack it as a standalone Xbox-ready MSIX file
+          & $makeappx pack /d unpacked_app /p Nuvio_Xbox.msix
+          
+          # 6. Generate your developer certificate (CN=central)
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=central" -KeyUsage DigitalSignature -FriendlyName "NuvioXboxCert" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
           $pwd = ConvertTo-SecureString -String "nuviotest" -Force -AsPlainText
           Export-PfxCertificate -cert $cert -FilePath "NuvioCert.pfx" -Password $pwd
           
-          # 3. Find Microsoft's official x64 SignTool
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1).FullName
-          
-          # 4. Stamp the signature onto the Nuvio bundle
-          & $signtool sign /fd SHA256 /a /f NuvioCert.pfx /p nuviotest Nuvio.msixbundle
+          # 7. Apply the signature to the patched app
+          & $signtool sign /fd SHA256 /a /f NuvioCert.pfx /p nuviotest Nuvio_Xbox.msix
 
-      - name: Upload Signed App
+      - name: Upload Xbox App
         uses: actions/upload-artifact@v4
         with:
-          name: Signed-Nuvio-Package
-          path: Nuvio.msixbundle
+          name: Nuvio-Xbox-Ready
+          path: Nuvio_Xbox.msix
