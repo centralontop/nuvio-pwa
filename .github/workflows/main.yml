@@ -1,0 +1,33 @@
+name: Sign Xbox App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  sign:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate Certificate and Sign Package
+        shell: powershell
+        run: |
+          # 1. Create a self-signed certificate matching your Publisher ID (CN=Nasser)
+          $cert = New-SelfSignedCertificate -Type Custom -Subject "CN=Nasser" -KeyUsage DigitalSignature -FriendlyName "NuvioXboxCert" -CertStoreLocation "Cert:\CurrentUser\My" -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+          
+          # 2. Export it as a PFX file so we can use it to sign the app
+          $pwd = ConvertTo-SecureString -String "nuviotest" -Force -AsPlainText
+          Export-PfxCertificate -cert $cert -FilePath "NuvioCert.pfx" -Password $pwd
+          
+          # 3. Find Microsoft's official SignTool on the cloud server
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          
+          # 4. Stamp the signature onto the Nuvio bundle!
+          & $signtool sign /fd SHA256 /a /f NuvioCert.pfx /p nuviotest Nuvio.msixbundle
+
+      - name: Upload Signed App
+        uses: actions/upload-artifact@v4
+        with:
+          name: Signed-Nuvio-Package
+          path: Nuvio.msixbundle
