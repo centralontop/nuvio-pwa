@@ -20,8 +20,8 @@ jobs:
           $pwd = ConvertTo-SecureString -String "nuviotest" -Force -AsPlainText
           Export-PfxCertificate -cert $cert -FilePath "NuvioCert.pfx" -Password $pwd
           
-          # 3. Find Microsoft's official SignTool on the cloud server
-          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Select-Object -First 1).FullName
+          # 3. Find Microsoft's official x64 SignTool on the cloud server (filtering for \x64\ specifically)
+          $signtool = (Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Filter "signtool.exe" -Recurse | Where-Object { $_.FullName -match "\\x64\\" } | Select-Object -First 1).FullName
           
           # 4. Stamp the signature onto the Nuvio bundle!
           & $signtool sign /fd SHA256 /a /f NuvioCert.pfx /p nuviotest Nuvio.msixbundle
