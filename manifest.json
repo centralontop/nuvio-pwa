@@ -1,0 +1,17 @@
+{
+  "background_color": "#0c0d0d",
+  "dir": "ltr",
+  "display": "standalone",
+  "name": "Nuvio Web",
+  "orientation": "any",
+  "scope": "/",
+  "short_name": "Nuvio",
+  "start_url": "https://web.nuvioapp.space/",
+  "theme_color": "#0c0d0d",
+  "id": "nuvio",
+  "description": "An XBOX web wrapper for the official Nuvio Web.",
+  "categories": [
+    "entertainment",
+    "sports"
+  ]
+}
