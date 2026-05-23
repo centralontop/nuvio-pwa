@@ -20,8 +20,8 @@ jobs:
           # 2. Unpack PWABuilder's bundle to get to the core app file
           & $makeappx unbundle /p Nuvio.msixbundle /d unbundled
           
-          # 3. Find the main MSIX package (ignoring scale assets) and extract it
-          $msix = Get-ChildItem -Path "unbundled" -Filter "*.msix" | Where-Object { $_.Name -notmatch "scale" } | Select-Object -First 1
+          # 3. Find the main package (catching both .msix and .appx just in case)
+          $msix = Get-ChildItem -Path "unbundled" | Where-Object { ($_.Extension -eq ".msix" -or $_.Extension -eq ".appx") -and $_.Name -notmatch "scale" } | Select-Object -First 1
           & $makeappx unpack /p $msix.FullName /d unpacked_app
           
           # 4. The Magic Trick: Patch the Manifest to unlock Xbox installation
